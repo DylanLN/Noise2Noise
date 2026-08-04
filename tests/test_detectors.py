@@ -4,7 +4,7 @@ import numpy as np
 from dsp import Feature
 from detectors import (HysteresisMachine, State, Detector, Episode,
                        ImpactDetector, DoorDetector, FootstepDetector,
-                       JumpDetector, BallDetector, ChairDetector)
+                       JumpDetector, BallDetector, ChairDetector, LoudnessDetector)
 
 
 def _f(**kw):
@@ -110,6 +110,14 @@ def test_ball_regularity():
     f2 = _f(crest_factor=6.0, peak_count=5, peak_interval=np.array([0.1, 0.8, 0.15]),
             interval_variance=0.7)
     assert not d.rule(f2)
+
+
+# ── 响度触发器 ──
+def test_loudness_triggers():
+    d = LoudnessDetector("Loudness", 0, 16000, 21.0, n1=1, n2=1, n3=1)
+    d.set_rms_norm_min(1.3)
+    assert d.rule(_f(rms_norm=2.0))
+    assert not d.rule(_f(rms_norm=1.0))
 
 
 # ── 时长型 ──

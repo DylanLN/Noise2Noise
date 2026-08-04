@@ -9,18 +9,19 @@ from pathlib import Path
 
 from audio import AudioIn, AudioOut
 from config import Config, load_config
-from detectors import DETECTOR_CLASSES
+from detectors import DETECTOR_CLASSES, LoudnessDetector
 from dsp import AudioFilter, Baseline, FeatureExtractor
 from engine import EventManager, MuteGate, ResponseEngine, ScheduleManager
 import paths
 
 
 def _pick_sound(sounds_dir: str) -> str | None:
-    """从反馈音目录随机选一个（wav/mp3/flac）。无音效时返回 None。"""
+    """从反馈音目录递归随机选一个（wav/mp3/flac，含子目录如 sounds/default/）。"""
     d = Path(sounds_dir)
     if not d.exists():
         return None
-    files = [p for p in d.iterdir() if p.suffix.lower() in (".wav", ".mp3", ".flac")]
+    files = [p for p in d.rglob("*") if p.is_file()
+             and p.suffix.lower() in (".wav", ".mp3", ".flac")]
     return str(random.choice(files)) if files else None
 
 
@@ -38,11 +39,18 @@ class Controller:
         self.extractor = FeatureExtractor(self.sample_rate,
                                           cfg.short_window_ms, cfg.long_window_ms)
         self.baseline = Baseline(self.sample_rate)
-        # 优先级 = 类顺序倒排（Impact=6 最高 … Chair=1 最低），与设计 §九 一致
+        # 优先级 = 类顺序倒排（Impact=6 最高 … Loudness=0 最低），与设计 §九 一致
         n = len(DETECTOR_CLASSES)
-        self.detectors = [c(c.__name__.replace("Detector", ""), n - i,
-                            self.sample_rate, cfg.short_window_ms)
-                          for i, c in enumerate(DETECTOR_CLASSES)]
+        self.detectors = []
+        for i, c in enumerate(DETECTOR_CLASSES):
+            name = c.__name__.replace("Detector", "")
+            if c is LoudnessDetector:
+                # 响度触发要抓短促敲击（1-2 帧），用快速滞回；其余检测器保持默认
+                self.detectors.append(c(name, n - i, self.sample_rate,
+                                        cfg.short_window_ms, n1=1, n2=1, n3=5))
+            else:
+                self.detectors.append(c(name, n - i, self.sample_rate, cfg.short_window_ms))
+        self.loud = next(d for d in self.detectors if isinstance(d, LoudnessDetector))
         self.em = EventManager(
             self.detectors,
             arbitration_window_ms=cfg.arbitration_window_ms,
@@ -101,12 +109,16 @@ class Controller:
         self.extractor.set_rms_threshold(self.baseline.threshold(self.cfg.sensitivity))
         self.extractor.set_peak_threshold(self.baseline.peak_threshold(
             self.cfg.sensitivity, floor=1.0))
+        # 响度触发器阈值随容忍度更新；并刷新归一化 RMS（用最新 baseline）
+        self.loud.set_rms_norm_min(self.baseline.threshold_norm(self.cfg.sensitivity))
+        feat.rms_norm = feat.rms / max(self.baseline.baseline_rms, 1e-9)
         self.em.update(feat)
         for trig in self.em.take_triggers():
-            verdict = self.schedule.decide(feat.ts)
+            now = time.time()                        # 时间窗口/冷却用真实时钟
+            verdict = self.schedule.decide(now)
             if verdict.allowed:
-                self.response.handle(trig, feat.ts, set_muted=self.audio_in.set_muted)
-                self.schedule.record_response(feat.ts)
+                self.response.handle(trig, now, set_muted=self.audio_in.set_muted)
+                self.schedule.record_response(now)
             else:
                 self._log(f"事件 {trig.detector} 未响应：{verdict.reason}")
         if self.on_feature:

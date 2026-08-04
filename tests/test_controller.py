@@ -53,6 +53,29 @@ def test_calibration_then_impulses_no_crash():
     assert ctrl.em.take_triggers() == [] or True
 
 
+def test_loud_sound_triggers_response():
+    """端到端：响亮脉冲 → 响度检测 → Episode 关闭 → 触发并播放。"""
+    cfg = Config()
+    cfg.sensitivity = 1.0
+    cfg.schedule_always = True
+    cfg.confirm_count = 1
+    played = []
+    ctrl = Controller(cfg)
+    ctrl.audio_out = type("Out", (), {"play": lambda self, p: played.append(p) or 1.0})()
+    sr = cfg.sample_rate
+    short_n = int(sr * cfg.short_window_ms / 1000)
+    rng = np.random.default_rng(0)
+    for _ in range(int(11.0 * sr / short_n)):            # 标定（模拟麦克风底噪）
+        ctrl.process(rng.normal(0, 0.001, short_n))
+    assert ctrl.baseline.calibrated
+    # 0.15s 响亮低频脉冲（模拟拍桌）+ 3s 数字静音（Episode 关闭 → 触发）
+    burst = 1.0 * np.sin(2 * np.pi * 60 * np.arange(int(0.15 * sr)) / sr)
+    sig = np.concatenate([burst, np.zeros(int(3 * sr))])
+    for fr in _frames(sig, sr, short_n):
+        ctrl.process(fr)
+    assert played, "响亮噪声应触发并播放反馈音"
+
+
 def test_feedback_file_used(tmp_path):
     cfg = Config()
     wav = tmp_path / "custom.wav"

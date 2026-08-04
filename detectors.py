@@ -129,38 +129,24 @@ def _interval_ok(f: Feature, lo_ms: float, hi_ms: float) -> bool:
 
 
 class ImpactDetector(Detector):
-    """撞击/重物掉落：高峰均比 + 快 attack + 短 decay + 频谱适中平坦。
-    flat_range 下界放宽到 0.1：木质桌面的敲击是窄带共振，严格 0.3 会把它们漏掉。
-    单次瞬态即触发（confirm_count=1），与设计 §十 一致。"""
-    defaults = {"crest_factor_min": 6.0, "attack_time_ms_max": 50.0,
-                "decay_time_ms_max": 300.0, "flat_range": (0.1, 0.7)}
+    """撞击/重物掉落：高峰均比 + 频谱适中平坦。
+    V1 不依赖 attack/decay（单帧测不准瞬态，跨帧测量留待 V2），
+    匹配不到时由 LoudnessDetector 兜底。"""
+    defaults = {"crest_factor_min": 4.0, "flat_range": (0.1, 0.6)}
 
     def rule(self, f: Feature) -> bool:
         if f.crest_factor < self.crest_min:
-            return False
-        if f.attack_time_ms is None or f.attack_time_ms > self.rules["attack_time_ms_max"]:
-            return False
-        if f.decay_time_ms is None or f.decay_time_ms > self.rules["decay_time_ms_max"]:
             return False
         lo, hi = self.rules["flat_range"]
         return lo <= f.spectral_flatness <= hi
 
 
 class DoorDetector(Detector):
-    """摔门：频谱更宽更平坦 + 快 attack + 中等偏长 decay（与 Impact 区分）。
-    单次瞬态即触发。"""
-    defaults = {"crest_factor_min": 4.0, "flat_min": 0.6, "attack_time_ms_max": 30.0,
-                "decay_ms": (200.0, 600.0)}
+    """摔门：频谱更宽更平坦。与 Impact 主要靠 flatness 区分。"""
+    defaults = {"crest_factor_min": 4.0, "flat_min": 0.55}
 
     def rule(self, f: Feature) -> bool:
-        if f.spectral_flatness < self.rules["flat_min"]:
-            return False
-        if f.attack_time_ms is None or f.attack_time_ms > self.rules["attack_time_ms_max"]:
-            return False
-        if f.decay_time_ms is None:
-            return False
-        lo, hi = self.rules["decay_ms"]
-        return lo <= f.decay_time_ms <= hi
+        return f.crest_factor >= self.crest_min and f.spectral_flatness > self.rules["flat_min"]
 
 
 class FootstepDetector(Detector):
@@ -225,6 +211,19 @@ class ChairDetector(Detector):
         return f.spectral_flux <= self.rules["spectral_flux_max"]
 
 
+class LoudnessDetector(Detector):
+    """响度触发器（兜底/主触发器）：声音明显高于本底即触发，不挑声学特征。
+    保证"噪声大了就响应"——即使拍桌子匹配不上 Impact/Door 也能被它抓到。
+    阈值 = 1 + sensitivity×(std/RMS)，由 Controller 逐帧更新（容忍度=1 时极敏感）。"""
+    defaults = {"rms_norm_min": 2.0}
+
+    def set_rms_norm_min(self, v: float) -> None:
+        self.rules["rms_norm_min"] = v
+
+    def rule(self, f: Feature) -> bool:
+        return f.rms_norm >= self.rules["rms_norm_min"]
+
+
 #: 构造顺序即触发优先级（高优先在前），仲裁用 priority 数值
 DETECTOR_CLASSES = [ImpactDetector, DoorDetector, JumpDetector,
-                    FootstepDetector, BallDetector, ChairDetector]
+                    FootstepDetector, BallDetector, ChairDetector, LoudnessDetector]
