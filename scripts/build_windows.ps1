@@ -1,6 +1,8 @@
 # 一键打包 Windows exe（PyInstaller，无控制台窗口）
 # 产物：dist\NoiseDefense.exe（单文件），config.yaml 与 sounds\ 放在同目录
-# 用法：在 PowerShell 中运行  ./scripts/build_windows.ps1
+# 用法（PowerShell 默认禁脚本，需带 Bypass）：
+#   powershell -ExecutionPolicy Bypass -File .\scripts\build_windows.ps1
+# 更简单：直接运行 .\scripts\build_windows.bat（无执行策略限制）
 $ErrorActionPreference = "Stop"
 Set-Location (Split-Path $PSScriptRoot -Parent)
 

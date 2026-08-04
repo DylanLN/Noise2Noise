@@ -70,9 +70,10 @@ env -u PYTHONPATH .venv/bin/python -m pytest tests/ -v
 
 ### Windows（在 Windows 上执行）
 
-```powershell
-./scripts/build_windows.ps1
-# 产物：dist\NoiseDefense.exe —— 双击运行；日志在 dist\logs\app.log
+```bat
+scripts\build_windows.bat
+:: 或：powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
+:: 产物：dist\NoiseDefense.exe —— 双击运行；日志在 dist\logs\app.log
 ```
 
 ### Ubuntu（在本机执行）
