@@ -7,7 +7,7 @@ import threading
 import time
 from pathlib import Path
 
-from audio import AudioIn, AudioOut
+from audio import AudioIn, AudioOut, SimAudioIn
 from config import Config, load_config
 from detectors import DETECTOR_CLASSES, LoudnessDetector
 from dsp import AudioFilter, Baseline, FeatureExtractor
@@ -28,10 +28,11 @@ def _pick_sound(sounds_dir: str) -> str | None:
 class Controller:
     """把 滤波→特征→标定→检测→事件→时间窗→响应 串成一条 DSP 流水线。"""
 
-    def __init__(self, cfg: Config, on_feature=None, on_log=None):
+    def __init__(self, cfg: Config, on_feature=None, on_log=None, sim_mode: bool = False):
         self.cfg = cfg
         self.on_feature = on_feature
         self.on_log = on_log
+        self.sim_mode = sim_mode                # 无音频硬件时用模拟输入测试检测链路
         self.log_path: str | None = None        # 设置后所有日志同时写入该文件
         self.sample_rate = cfg.sample_rate
         self.filter = AudioFilter(self.sample_rate,
@@ -74,6 +75,10 @@ class Controller:
     # ── 生命周期 ──
     def start(self) -> None:
         self._log("开始监听")
+        if self.sim_mode:
+            self._log("模拟输入模式：无音频硬件，用生成的脉冲测试检测链路")
+            self.audio_in = SimAudioIn(sample_rate=self.sample_rate,
+                                       chunk_size=self.extractor.short_n)
         self.audio_in.start()
         self._running = True
         self._thread = threading.Thread(target=self._loop, daemon=True)
@@ -132,14 +137,16 @@ class Controller:
         if path is None:
             self._log("无反馈音文件，跳过播放")
             return 0.0
-        self._log(f"播放 {Path(path).name}")
+        self._log(f"播放 {Path(path).name}{'（模拟，无音频硬件）' if self.sim_mode else ''}")
+        if self.sim_mode:
+            return 500.0                       # 模拟模式不实际出声
         return self.audio_out.play(path)
 
     def _log(self, msg: str) -> None:
+        line = f"{time.strftime('%H:%M:%S')} {msg}"
         if self.on_log:
-            self.on_log(msg)
+            self.on_log(line)
         if self.log_path:
-            line = f"{time.strftime('%H:%M:%S')} {msg}"
             p = Path(self.log_path)
             p.parent.mkdir(parents=True, exist_ok=True)   # logs/ 目录可能不存在
             with open(p, "a", encoding="utf-8") as f:
@@ -149,9 +156,10 @@ class Controller:
 def main() -> int:
     cfg = load_config()
     ctrl = Controller(cfg, on_log=print)
-    # 日志同时写文件（GUI 模式与打包 --windowed 也生效）
+    # 日志同时写文件（GUI 模式与打包 --windowed 也生效），并在窗口显示路径
     ctrl.log_path = str(paths.app_dir() / "logs" / "app.log")
     ctrl._log(f"采样率 {cfg.sample_rate}Hz，短窗 {cfg.short_window_ms}ms")
+    ctrl._log(f"日志文件：{ctrl.log_path}")
     try:
         from PyQt6.QtWidgets import QApplication
         from gui import MainWindow

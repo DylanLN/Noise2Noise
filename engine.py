@@ -193,5 +193,5 @@ class ResponseEngine:
         if self.on_respond:
             self.on_respond(trigger, plan)
         if self.on_log:
-            self.on_log(f"触发 {trigger.detector} @{now:.1f}s，静音窗口 {plan}")
+            self.on_log(f"触发 {trigger.detector}，静音窗口 {plan}")
         return True

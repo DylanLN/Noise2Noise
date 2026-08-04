@@ -127,7 +127,11 @@ class MainWindow(QMainWindow):
             lvl.addRow(label, bar)
         root.addLayout(lvl)
 
-        # 控制
+        # 模拟输入开关 + 控制
+        self.sim_check = QCheckBox("模拟输入（无麦克风时测试）")
+        self.sim_check.toggled.connect(self._on_sim)
+        root.addWidget(self.sim_check)
+
         ctrl_row = QHBoxLayout()
         self.start_btn = QPushButton("开始监听")
         self.stop_btn = QPushButton("停止")
@@ -163,7 +167,8 @@ class MainWindow(QMainWindow):
                 for name in fn():
                     combo.addItem(name)
             except OSError as e:
-                self._on_log(f"音频设备不可用：{e}")
+                self._on_log(f"音频后端不可用（{e}）。设备列表为空，"
+                             f"可勾选「模拟输入」测试检测链路。")
 
     # ── 控件回调 ──
     def _on_detector_toggle(self, checked: bool) -> None:
@@ -197,6 +202,10 @@ class MainWindow(QMainWindow):
     def _on_always(self, checked: bool) -> None:
         self.cfg.schedule_always = checked
         self.controller.schedule.always = checked
+
+    def _on_sim(self, checked: bool) -> None:
+        self.controller.sim_mode = checked
+        self._on_log(f"{'已启用' if checked else '已关闭'}模拟输入（重新点击开始监听生效）")
 
     def _on_pick_sound(self) -> None:
         path, _ = QFileDialog.getOpenFileName(

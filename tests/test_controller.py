@@ -76,6 +76,28 @@ def test_loud_sound_triggers_response():
     assert played, "响亮噪声应触发并播放反馈音"
 
 
+def test_sim_audio_produces_burst_and_silence():
+    from audio import SimAudioIn
+    sim = SimAudioIn(sample_rate=48000, burst_sec=0.15, period_sec=3.0, chunk_size=1008)
+    sim.start()
+    chunks = []
+    while len(chunks) < 20:
+        c = sim.get(timeout=0.5)
+        if c is not None:
+            chunks.append(c)
+    sim.stop()
+    rms = [float(np.sqrt(np.mean(c ** 2))) for c in chunks]
+    assert max(rms) > 0.1        # 突发段有大能量
+    assert min(rms) < 1e-3       # 静音段接近 0
+
+
+def test_sim_mode_play_skips_hardware():
+    cfg = Config()
+    ctrl = Controller(cfg, sim_mode=True)
+    assert ctrl.sim_mode
+    assert ctrl._play(None) == 500.0     # 模拟模式：不调用 audio_out，返回名义时长
+
+
 def test_feedback_file_used(tmp_path):
     cfg = Config()
     wav = tmp_path / "custom.wav"

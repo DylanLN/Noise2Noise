@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import queue
 import threading
+import time
 
 import numpy as np
 
@@ -68,6 +69,63 @@ class AudioOut:
         sd.play(samples * self.volume, decoded.sample_rate, device=self.device)
         sd.wait()                                      # 阻塞到播放结束，防止尾音自触发
         return len(samples) / decoded.sample_rate * 1000.0
+
+
+class SimAudioIn:
+    """模拟输入：周期性产生"拍桌"脉冲（低频正弦+噪声），替代真实麦克风。
+    接口与 AudioIn 一致；供无音频硬件时测试完整检测链路。"""
+
+    def __init__(self, sample_rate: int = 48000, burst_sec: float = 0.15,
+                 period_sec: float = 3.0, chunk_size: int = 1008):
+        self.sample_rate = sample_rate
+        self.chunk_size = chunk_size
+        rng = np.random.default_rng(1)
+        sr = sample_rate
+        burst_n = int(sr * burst_sec)
+        t = np.arange(burst_n) / sr
+        burst = 0.8 * np.sin(2 * np.pi * 60 * t) + 0.15 * rng.normal(0, 1, burst_n)
+        silence = np.zeros(int(sr * (period_sec - burst_sec)))
+        self.wave = np.concatenate([burst, silence])
+        self._q: queue.Queue[np.ndarray] = queue.Queue(maxsize=128)
+        self._thread: threading.Thread | None = None
+        self._running = False
+        self._muted = False
+
+    def start(self) -> None:
+        self._running = True
+        self._thread = threading.Thread(target=self._gen, daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._running = False
+        if self._thread:
+            self._thread.join(timeout=2.0)
+            self._thread = None
+
+    def set_muted(self, muted: bool) -> None:
+        self._muted = muted
+
+    def get(self, timeout: float = 0.1) -> np.ndarray | None:
+        try:
+            return self._q.get(timeout=timeout)
+        except queue.Empty:
+            return None
+
+    def _gen(self) -> None:
+        buf = np.tile(self.wave, 10)                 # 循环切片足够长
+        pos = 0
+        dt = self.chunk_size / self.sample_rate       # 按真实时间节奏喂块
+        while self._running:
+            if pos + self.chunk_size > len(buf):
+                pos = 0
+            chunk = buf[pos:pos + self.chunk_size]
+            pos += self.chunk_size
+            if not self._muted:
+                try:
+                    self._q.put_nowait(chunk.copy())
+                except queue.Full:
+                    pass
+            time.sleep(dt)
 
 
 # ── 设备枚举（GUI 用）──────────────────────────────────────────────────
