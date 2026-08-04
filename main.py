@@ -14,6 +14,13 @@ from dsp import AudioFilter, Baseline, FeatureExtractor
 from engine import EventManager, MuteGate, ResponseEngine, ScheduleManager
 import paths
 
+_REASON_CN = {
+    "outside_window": "不在活跃时段",
+    "not_fresh": "距上次响应未满冷却",
+    "max_responses": "已达本时段响应上限",
+    "manual_pending": "等待人工确认",
+}
+
 
 def _pick_sound(sounds_dir: str) -> str | None:
     """从反馈音目录递归随机选一个（wav/mp3/flac，含子目录如 sounds/default/）。"""
@@ -125,7 +132,7 @@ class Controller:
                 self.response.handle(trig, now, set_muted=self.audio_in.set_muted)
                 self.schedule.record_response(now)
             else:
-                self._log(f"事件 {trig.detector} 未响应：{verdict.reason}")
+                self._log(f"事件 {trig.detector} 未响应：{_REASON_CN.get(verdict.reason, verdict.reason)}")
         if self.on_feature:
             self.on_feature(feat)
         return feat
