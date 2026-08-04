@@ -11,8 +11,13 @@ Windows 家庭噪声事件检测与自动响应系统（"以噪治噪"）。监�
 
 ## 开发环境（Ubuntu）
 
+PyQt6 需要 xcb 平台插件、sounddevice 需要 PortAudio，先装系统依赖：
+
 ```bash
-sudo apt install libportaudio2     # sounddevice 需要 PortAudio
+sudo apt install -y \
+  libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+  libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 \
+  libxcb-xkb1 libxkbcommon-x11-0 libportaudio2
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
