@@ -1,0 +1,31 @@
+# Noise Defense System 配置（V1 精简版）
+# 字段含义见 config.py 的 Config 类；阈值均为初始猜测，跑起来后按实际环境调
+
+# ── 音频 ──
+input_device: ""              # 输入设备名（留空 = 系统默认；GUI 里可选择）
+output_device: ""             # 输出设备名（留空 = 系统默认）
+input_type: "auto"            # auto / wired / bluetooth（auto 按设备名关键词判断）
+sample_rate: 48000            # 有线路径采样率；蓝牙路径降级协商在 V2 做
+short_window_ms: 21.0         # 短窗时长（点数 = sample_rate × ms / 1000）
+long_window_ms: 85.0          # 长窗时长（频谱分辨率 ≈ 11.7Hz，与采样率无关）
+
+# ── 检测 ──
+sensitivity: 5.0              # 容忍度：越大越不敏感（阈值 = baseline + sensitivity × std）
+cooldown: 5.0                 # 响应后冷却（秒）
+confirm_count: 2              # 触发需要的 Episode 数（滑动窗口内）
+confirm_window_sec: 65.0      # confirm_count 的计数窗口（秒）
+episode_max_sec: 30.0         # 单 Episode 最长时长，超过强制分段
+episode_close_gap_sec: 2.0    # 包络回落且无峰值持续此秒数即关闭 Episode
+arbitration_window_ms: 300    # 多 Detector 同时命中时的去重窗口
+mute_ignore_ms: 200.0         # 播放结束后忽略采集的固定时长（有线路径）
+
+# ── 时间窗口 ──
+active_windows:
+  - "12:00-14:00"
+  - "18:00-24:00"
+max_responses_per_window: 5   # 每个活跃时段内最多自动响应次数
+fresh_episode_gap_sec: 60.0   # 距上次响应需静默满该时长才允许再次响应
+
+# ── 响应 ──
+volume: 1.0                   # 播放音量（0~1）
+sounds_dir: "sounds"          # 反馈音目录（随机挑一个播放）

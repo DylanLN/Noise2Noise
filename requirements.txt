@@ -1,0 +1,7 @@
+numpy
+scipy
+PyYAML
+sounddevice
+miniaudio
+PyQt6
+pytest
