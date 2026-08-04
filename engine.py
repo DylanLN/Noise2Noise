@@ -22,12 +22,14 @@ class Trigger:
 class EventManager:
     """推进所有 Detector；Episode 计数达标才产生 Trigger；多 Detector 同时命中按优先级仲裁。"""
 
-    def __init__(self, detectors: list[Detector], confirm_count: int,
-                 confirm_window_sec: float, arbitration_window_ms: int = 300):
+    def __init__(self, detectors: list[Detector], arbitration_window_ms: int = 300,
+                 default_confirm_count: int = 1, default_confirm_window_sec: float = 65.0,
+                 on_episode=None):
         self.detectors = detectors
-        self.confirm_count = confirm_count
-        self.confirm_window = confirm_window_sec
+        self.default_confirm_count = default_confirm_count
+        self.default_confirm_window = default_confirm_window_sec
         self.arb_window = arbitration_window_ms / 1000.0
+        self.on_episode = on_episode                  # (name, count, target) 调试回调
         self._history: dict[str, deque[float]] = defaultdict(deque)
         self._pending: list[Trigger] = []
 
@@ -63,11 +65,17 @@ class EventManager:
         return sum(1 for d in enabled if d.non_idle) / len(enabled)
 
     def _maybe_trigger(self, d: Detector, ep_ts: float) -> None:
+        # 每个 Detector 自带 confirm_count / window（见 detector.defaults），全局为兜底
+        cc = int(d.rules.get("confirm_count", self.default_confirm_count))
+        win = float(d.rules.get("confirm_window_sec", self.default_confirm_window))
         h = self._history[d.name]
         h.append(ep_ts)
+        count = sum(1 for t in h if ep_ts - t <= win)
+        if self.on_episode:
+            self.on_episode(d.name, count, cc)
         # 滑动窗口内 Episode 数达标即产生 Trigger（episode 关闭本身是边沿事件，
         # 不会逐帧重复；重复响应由 ResponseEngine 冷却 / Schedule 上限 / Fresh 间隔控制）
-        if sum(1 for t in h if ep_ts - t <= self.confirm_window) >= self.confirm_count:
+        if count >= cc:
             self._pending.append(Trigger(d.name, ep_ts, d.priority))
 
 
@@ -94,13 +102,16 @@ class ScheduleManager:
         self.windows = [_parse_window(w) for w in cfg.active_windows]
         self.max_responses = cfg.max_responses_per_window
         self.fresh_gap = cfg.fresh_episode_gap_sec
+        self.always = cfg.schedule_always              # 测试用：忽略时间窗口
         self._counts: dict[int, int] = {}
         self._last_response: float | None = None
 
     def decide(self, ts: float) -> Verdict:
         idx = self._active_index(ts % (24 * 3600.0))
-        if idx is None:
+        if idx is None and not self.always:
             return Verdict(False, "outside_window")
+        if idx is None:
+            idx = -1                                   # always 模式用统一计数桶
         if self._last_response is not None and ts - self._last_response < self.fresh_gap:
             return Verdict(False, "not_fresh")
         if self._counts.get(idx, 0) >= self.max_responses:

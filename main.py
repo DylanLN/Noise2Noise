@@ -4,6 +4,7 @@ from __future__ import annotations
 import random
 import sys
 import threading
+import time
 from pathlib import Path
 
 from audio import AudioIn, AudioOut
@@ -30,6 +31,7 @@ class Controller:
         self.cfg = cfg
         self.on_feature = on_feature
         self.on_log = on_log
+        self.log_path: str | None = None        # 设置后所有日志同时写入该文件
         self.sample_rate = cfg.sample_rate
         self.filter = AudioFilter(self.sample_rate,
                                   lowpass_hz=5000.0 if self.sample_rate >= 16000 else 3500.0)
@@ -41,8 +43,13 @@ class Controller:
         self.detectors = [c(c.__name__.replace("Detector", ""), n - i,
                             self.sample_rate, cfg.short_window_ms)
                           for i, c in enumerate(DETECTOR_CLASSES)]
-        self.em = EventManager(self.detectors, cfg.confirm_count,
-                               cfg.confirm_window_sec, cfg.arbitration_window_ms)
+        self.em = EventManager(
+            self.detectors,
+            arbitration_window_ms=cfg.arbitration_window_ms,
+            default_confirm_count=cfg.confirm_count,
+            default_confirm_window_sec=cfg.confirm_window_sec,
+            on_episode=lambda name, count, target:
+                self._log(f"Episode[{name}] {count}/{target}"))
         self.schedule = ScheduleManager(cfg)
         self.gate = MuteGate(cfg.mute_ignore_ms, measured_latency_ms=None)
         self.sounds = str(paths.sounds_dir(cfg.sounds_dir))
@@ -107,7 +114,9 @@ class Controller:
         return feat
 
     def _play(self, trigger) -> float:
-        path = _pick_sound(self.sounds)
+        # 指定了回击音文件 → 用它；否则从 sounds/ 随机
+        fb = self.cfg.feedback_file.strip()
+        path = fb if fb and Path(fb).exists() else _pick_sound(self.sounds)
         if path is None:
             self._log("无反馈音文件，跳过播放")
             return 0.0
@@ -117,24 +126,18 @@ class Controller:
     def _log(self, msg: str) -> None:
         if self.on_log:
             self.on_log(msg)
+        if self.log_path:
+            line = f"{time.strftime('%H:%M:%S')} {msg}"
+            with open(self.log_path, "a", encoding="utf-8") as f:
+                f.write(line + "\n")
 
 
 def main() -> int:
-    # 打包(--windowed)后没有控制台，日志落到 exe 旁 logs/app.log
-    log_file = None
-    if getattr(sys, "frozen", False):
-        log_file = paths.app_dir() / "logs" / "app.log"
-        log_file.parent.mkdir(parents=True, exist_ok=True)
-
-    def log(msg: str) -> None:
-        print(msg)
-        if log_file:
-            with open(log_file, "a", encoding="utf-8") as f:
-                f.write(f"{msg}\n")
-
     cfg = load_config()
-    ctrl = Controller(cfg, on_log=log)
-    log(f"采样率 {cfg.sample_rate}Hz，短窗 {cfg.short_window_ms}ms")
+    ctrl = Controller(cfg, on_log=print)
+    # 日志同时写文件（GUI 模式与打包 --windowed 也生效）
+    ctrl.log_path = str(paths.app_dir() / "logs" / "app.log")
+    ctrl._log(f"采样率 {cfg.sample_rate}Hz，短窗 {cfg.short_window_ms}ms")
     try:
         from PyQt6.QtWidgets import QApplication
         from gui import MainWindow
@@ -143,7 +146,7 @@ def main() -> int:
         win.show()
         return app.exec()
     except Exception as e:                           # GUI 不可用（无显示/缺依赖）→ 控制台
-        log(f"GUI 不可用，退回控制台模式：{e}")
+        ctrl._log(f"GUI 不可用，退回控制台模式：{e}")
         ctrl.start()
         try:
             threading.Event().wait()

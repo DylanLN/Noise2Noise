@@ -22,7 +22,7 @@ class Config:
     # 检测
     sensitivity: float = 5.0
     cooldown: float = 5.0
-    confirm_count: int = 2
+    confirm_count: int = 1            # 触发所需 Episode 次数（GUI 滑条可调）
     confirm_window_sec: float = 65.0
     episode_max_sec: float = 30.0
     episode_close_gap_sec: float = 2.0
@@ -33,10 +33,12 @@ class Config:
     active_windows: list[str] = field(default_factory=lambda: ["12:00-14:00", "18:00-24:00"])
     max_responses_per_window: int = 5
     fresh_episode_gap_sec: float = 60.0
+    schedule_always: bool = False        # 测试用：忽略时间窗口，始终允许响应
 
     # 响应
     volume: float = 1.0
     sounds_dir: str = "sounds"
+    feedback_file: str = ""              # 指定单个回击音文件；留空则从 sounds/ 随机
 
 
 def load_config(path: str | Path | None = None) -> Config:

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QGroupBox,
-                             QHBoxLayout, QLabel, QLineEdit, QListWidget,
+from PyQt6.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QFormLayout,
+                             QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListWidget,
                              QMainWindow, QPlainTextEdit, QProgressBar, QPushButton,
                              QSlider, QVBoxLayout, QWidget)
 
@@ -53,18 +53,33 @@ class MainWindow(QMainWindow):
             self.det_checks[label] = cb
         root.addWidget(det_box)
 
-        # 容忍度 + 冷却
+        # 容忍度 / 冷却 / 触发次数（滑条右侧显示当前值）
         tol = QFormLayout()
+
         self.sensitivity = QSlider(Qt.Orientation.Horizontal)
         self.sensitivity.setRange(1, 20)
         self.sensitivity.setValue(int(cfg.sensitivity))
         self.sensitivity.valueChanged.connect(self._on_sensitivity)
-        tol.addRow("容忍度（越大越不敏感）", self.sensitivity)
+        self.sens_label = QLabel(f"{self.sensitivity.value()}/20")
+        row = QHBoxLayout(); row.addWidget(self.sensitivity); row.addWidget(self.sens_label)
+        tol.addRow("容忍度", row)
+
         self.cooldown = QSlider(Qt.Orientation.Horizontal)
         self.cooldown.setRange(1, 60)
         self.cooldown.setValue(int(cfg.cooldown))
         self.cooldown.valueChanged.connect(self._on_cooldown)
-        tol.addRow("冷却（秒）", self.cooldown)
+        self.cool_label = QLabel(f"{self.cooldown.value()}/60 秒")
+        row = QHBoxLayout(); row.addWidget(self.cooldown); row.addWidget(self.cool_label)
+        tol.addRow("冷却", row)
+
+        self.confirm = QSlider(Qt.Orientation.Horizontal)
+        self.confirm.setRange(1, 5)
+        self.confirm.setValue(cfg.confirm_count)
+        self.confirm.valueChanged.connect(self._on_confirm)
+        self.confirm_label = QLabel(f"{self.confirm.value()}/5 次触发")
+        row = QHBoxLayout(); row.addWidget(self.confirm); row.addWidget(self.confirm_label)
+        tol.addRow("触发次数", row)
+
         root.addLayout(tol)
 
         # 时间窗口
@@ -81,7 +96,24 @@ class MainWindow(QMainWindow):
         win_row.addWidget(self.win_add)
         win_lay.addWidget(self.win_list)
         win_lay.addLayout(win_row)
+        self.always_check = QCheckBox("始终允许响应（测试用，忽略时间窗口）")
+        self.always_check.setChecked(cfg.schedule_always)
+        self.always_check.toggled.connect(self._on_always)
+        win_lay.addWidget(self.always_check)
         root.addWidget(win_box)
+
+        # 回击音文件
+        fb = QFormLayout()
+        self.fb_path = QLineEdit(cfg.feedback_file)
+        self.fb_path.setReadOnly(True)
+        self.fb_path.setPlaceholderText("留空 = 从 sounds/ 随机播放")
+        self.fb_browse = QPushButton("浏览…")
+        self.fb_browse.clicked.connect(self._on_pick_sound)
+        fb_row = QHBoxLayout()
+        fb_row.addWidget(self.fb_path)
+        fb_row.addWidget(self.fb_browse)
+        fb.addRow("回击音文件", fb_row)
+        root.addLayout(fb)
 
         # 音量条（代替频谱）
         lvl = QFormLayout()
@@ -143,9 +175,16 @@ class MainWindow(QMainWindow):
 
     def _on_sensitivity(self, v: int) -> None:
         self.cfg.sensitivity = float(v)
+        self.sens_label.setText(f"{v}/20")
 
     def _on_cooldown(self, v: int) -> None:
         self.cfg.cooldown = float(v)
+        self.cool_label.setText(f"{v}/60 秒")
+
+    def _on_confirm(self, v: int) -> None:
+        self.cfg.confirm_count = v
+        self.controller.em.default_confirm_count = v
+        self.confirm_label.setText(f"{v}/5 次触发")
 
     def _on_add_window(self) -> None:
         spec = self.win_edit.text().strip()
@@ -154,6 +193,21 @@ class MainWindow(QMainWindow):
             self.cfg.active_windows = self._current_windows()
             self.controller.schedule.set_windows(self.cfg.active_windows)
             self.win_edit.clear()
+
+    def _on_always(self, checked: bool) -> None:
+        self.cfg.schedule_always = checked
+        self.controller.schedule.always = checked
+
+    def _on_pick_sound(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self, "选择回击音文件", "", "音频文件 (*.wav *.mp3 *.flac)")
+        if path:
+            self.set_feedback_file(path)
+
+    def set_feedback_file(self, path: str) -> None:
+        self.cfg.feedback_file = path
+        self.fb_path.setText(path)
+        self._on_log(f"回击音设为：{path}")
 
     def _current_windows(self) -> list[str]:
         return [self.win_list.item(i).text() for i in range(self.win_list.count())]

@@ -20,7 +20,7 @@ class StubDetector(Detector):
 # ── EventManager ──
 def test_single_episode_no_trigger():
     em = EventManager([StubDetector("Footstep", 3, [True] * 10 + [False] * 30)],
-                      confirm_count=2, confirm_window_sec=10.0)
+                      default_confirm_count=2, default_confirm_window_sec=10.0)
     ts = 0.0
     for _ in range(40):
         em.update(Feature(ts=ts)); ts += 0.02
@@ -30,7 +30,7 @@ def test_single_episode_no_trigger():
 def test_two_episodes_trigger():
     em = EventManager([StubDetector("Footstep", 3, [True] * 15 + [False] * 100
                                     + [True] * 15 + [False] * 30)],
-                      confirm_count=2, confirm_window_sec=10.0)
+                      default_confirm_count=2, default_confirm_window_sec=10.0)
     ts = 0.0
     trigs = []
     for _ in range(160):
@@ -43,7 +43,7 @@ def test_arbitration_highest_priority():
     em = EventManager(
         [StubDetector("Footstep", 3, [True] * 10 + [False] * 10),
          StubDetector("Impact", 6, [True] * 10 + [False] * 10)],
-        confirm_count=1, confirm_window_sec=10.0, arbitration_window_ms=300)
+        default_confirm_count=1, default_confirm_window_sec=10.0, arbitration_window_ms=300)
     ts = 0.0
     trigs = []
     for _ in range(40):                      # 需跑过 0.5s 静默关闭 Episode

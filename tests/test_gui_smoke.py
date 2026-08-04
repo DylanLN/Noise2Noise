@@ -61,3 +61,32 @@ def test_schedule_widget_applies(app):
     assert "22:00-01:00" in cfg.active_windows
     assert win.controller.schedule.windows  # 已重新解析
     win.close()
+
+
+def test_sliders_show_value_and_set_config(app):
+    win, cfg = _make_window()
+    assert win.confirm_label.text() == f"{cfg.confirm_count}/5 次触发"
+    win.confirm.setValue(3)
+    assert cfg.confirm_count == 3
+    assert win.controller.em.default_confirm_count == 3
+    assert win.confirm_label.text() == "3/5 次触发"
+    win.cooldown.setValue(10)
+    assert cfg.cooldown == 10.0
+    assert win.cool_label.text() == "10/60 秒"
+    win.close()
+
+
+def test_feedback_file_pick(app):
+    win, cfg = _make_window()
+    win.set_feedback_file("/tmp/my_sound.wav")
+    assert cfg.feedback_file == "/tmp/my_sound.wav"
+    assert win.fb_path.text() == "/tmp/my_sound.wav"
+    win.close()
+
+
+def test_always_respond_checkbox(app):
+    win, cfg = _make_window()
+    win.always_check.setChecked(True)
+    assert cfg.schedule_always is True
+    assert win.controller.schedule.always is True
+    win.close()

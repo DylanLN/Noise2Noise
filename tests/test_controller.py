@@ -51,3 +51,24 @@ def test_calibration_then_impulses_no_crash():
         ctrl.process(fr)
     # 触发路径不能抛异常；是否真正触发依赖阈值标定，这里只验证不崩溃
     assert ctrl.em.take_triggers() == [] or True
+
+
+def test_feedback_file_used(tmp_path):
+    cfg = Config()
+    wav = tmp_path / "custom.wav"
+    wav.write_bytes(b"RIFF" + b"\x00" * 32)          # 假 wav，不实际解码
+    cfg.feedback_file = str(wav)
+    ctrl = Controller(cfg)
+    played = []
+    ctrl.audio_out = type("Out", (), {"play": lambda self, p: played.append(p) or 1.0})()
+    ctrl._play(None)
+    assert played and str(wav) in played[0]
+
+
+def test_log_path_writes_file(tmp_path):
+    cfg = Config()
+    ctrl = Controller(cfg)
+    logf = tmp_path / "app.log"
+    ctrl.log_path = str(logf)
+    ctrl._log("测试日志行")
+    assert "测试日志行" in logf.read_text(encoding="utf-8")

@@ -129,9 +129,11 @@ def _interval_ok(f: Feature, lo_ms: float, hi_ms: float) -> bool:
 
 
 class ImpactDetector(Detector):
-    """撞击/重物掉落：高峰均比 + 快 attack + 短 decay + 频谱适中平坦。"""
+    """撞击/重物掉落：高峰均比 + 快 attack + 短 decay + 频谱适中平坦。
+    flat_range 下界放宽到 0.1：木质桌面的敲击是窄带共振，严格 0.3 会把它们漏掉。
+    单次瞬态即触发（confirm_count=1），与设计 §十 一致。"""
     defaults = {"crest_factor_min": 6.0, "attack_time_ms_max": 50.0,
-                "decay_time_ms_max": 300.0, "flat_range": (0.3, 0.6)}
+                "decay_time_ms_max": 300.0, "flat_range": (0.1, 0.7)}
 
     def rule(self, f: Feature) -> bool:
         if f.crest_factor < self.crest_min:
@@ -145,7 +147,8 @@ class ImpactDetector(Detector):
 
 
 class DoorDetector(Detector):
-    """摔门：频谱更宽更平坦 + 快 attack + 中等偏长 decay（与 Impact 区分）。"""
+    """摔门：频谱更宽更平坦 + 快 attack + 中等偏长 decay（与 Impact 区分）。
+    单次瞬态即触发。"""
     defaults = {"crest_factor_min": 4.0, "flat_min": 0.6, "attack_time_ms_max": 30.0,
                 "decay_ms": (200.0, 600.0)}
 
@@ -161,7 +164,8 @@ class DoorDetector(Detector):
 
 
 class FootstepDetector(Detector):
-    """跑步/快速脚步：归一化 RMS + 峰均比 + 低频占比 + 周期间隔 200~600ms。"""
+    """跑步/快速脚步：归一化 RMS + 峰均比 + 低频占比 + 周期间隔 200~600ms。
+    需 2 个 Episode 才触发（避免偶发单段噪声误报）。"""
     defaults = {"crest_factor_min": 4.0, "low_energy_ratio_min": 0.60,
                 "peak_count_min": 5, "peak_interval_ms": (200.0, 600.0),
                 "rms_norm_min": 2.0}
@@ -179,7 +183,7 @@ class FootstepDetector(Detector):
 
 
 class JumpDetector(Detector):
-    """蹦跳：更高低频占比 + 更慢间隔 400~800ms。"""
+    """蹦跳：更高低频占比 + 更慢间隔 400~800ms。需 2 个 Episode。"""
     defaults = {"crest_factor_min": 5.0, "low_energy_ratio_min": 0.70,
                 "peak_count_min": 3, "peak_interval_ms": (400.0, 800.0)}
 
@@ -194,7 +198,7 @@ class JumpDetector(Detector):
 
 
 class BallDetector(Detector):
-    """拍球：间隔高度一致（相对标准差小）+ 峰均比 + 峰值个数。"""
+    """拍球：间隔高度一致（相对标准差小）+ 峰均比 + 峰值个数。需 2 个 Episode。"""
     defaults = {"crest_factor_min": 4.0, "interval_variance_max": 0.20,
                 "peak_count_min": 4}
 
@@ -209,7 +213,7 @@ class BallDetector(Detector):
 
 
 class ChairDetector(Detector):
-    """拖家具：持续时间长 + 中频持续存在 + 频谱变化缓慢。"""
+    """拖家具：持续时间长 + 中频持续存在 + 频谱变化缓慢。时长型，1 个 Episode 即触发。"""
     defaults = {"crest_factor_min": 2.0, "duration_min_sec": 1.0,
                 "mid_energy_ratio_min": 0.25, "spectral_flux_max": 0.05}
 

@@ -12,7 +12,7 @@ long_window_ms: 85.0          # 长窗时长（频谱分辨率 ≈ 11.7Hz，与�
 # ── 检测 ──
 sensitivity: 5.0              # 容忍度：越大越不敏感（阈值 = baseline + sensitivity × std）
 cooldown: 5.0                 # 响应后冷却（秒）
-confirm_count: 2              # 触发需要的 Episode 数（滑动窗口内）
+confirm_count: 1              # 触发需要的 Episode 次数（GUI 滑条可调）
 confirm_window_sec: 65.0      # confirm_count 的计数窗口（秒）
 episode_max_sec: 30.0         # 单 Episode 最长时长，超过强制分段
 episode_close_gap_sec: 2.0    # 包络回落且无峰值持续此秒数即关闭 Episode
@@ -25,7 +25,9 @@ active_windows:
   - "18:00-24:00"
 max_responses_per_window: 5   # 每个活跃时段内最多自动响应次数
 fresh_episode_gap_sec: 60.0   # 距上次响应需静默满该时长才允许再次响应
+schedule_always: false        # 测试用：忽略时间窗口，始终允许响应
 
 # ── 响应 ──
 volume: 1.0                   # 播放音量（0~1）
 sounds_dir: "sounds"          # 反馈音目录（随机挑一个播放）
+feedback_file: ""             # 指定单个回击音文件（GUI 可浏览选择）；留空则从 sounds/ 随机
