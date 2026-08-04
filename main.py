@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import random
+import sys
 import threading
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from config import Config, load_config
 from detectors import DETECTOR_CLASSES
 from dsp import AudioFilter, Baseline, FeatureExtractor
 from engine import EventManager, MuteGate, ResponseEngine, ScheduleManager
+import paths
 
 
 def _pick_sound(sounds_dir: str) -> str | None:
@@ -43,6 +45,7 @@ class Controller:
                                cfg.confirm_window_sec, cfg.arbitration_window_ms)
         self.schedule = ScheduleManager(cfg)
         self.gate = MuteGate(cfg.mute_ignore_ms, measured_latency_ms=None)
+        self.sounds = str(paths.sounds_dir(cfg.sounds_dir))
         self.audio_out = AudioOut(device=cfg.output_device or None, volume=cfg.volume)
         self.response = ResponseEngine(
             cfg, self.gate, self._play,
@@ -104,7 +107,7 @@ class Controller:
         return feat
 
     def _play(self, trigger) -> float:
-        path = _pick_sound(self.cfg.sounds_dir)
+        path = _pick_sound(self.sounds)
         if path is None:
             self._log("无反馈音文件，跳过播放")
             return 0.0
@@ -117,11 +120,22 @@ class Controller:
 
 
 def main() -> int:
-    cfg = load_config("config.yaml")
-    ctrl = Controller(cfg, on_log=print)
-    print(f"采样率 {cfg.sample_rate}Hz，短窗 {cfg.short_window_ms}ms")
+    # 打包(--windowed)后没有控制台，日志落到 exe 旁 logs/app.log
+    log_file = None
+    if getattr(sys, "frozen", False):
+        log_file = paths.app_dir() / "logs" / "app.log"
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+
+    def log(msg: str) -> None:
+        print(msg)
+        if log_file:
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write(f"{msg}\n")
+
+    cfg = load_config()
+    ctrl = Controller(cfg, on_log=log)
+    log(f"采样率 {cfg.sample_rate}Hz，短窗 {cfg.short_window_ms}ms")
     try:
-        import sys
         from PyQt6.QtWidgets import QApplication
         from gui import MainWindow
         app = QApplication(sys.argv)
@@ -129,7 +143,7 @@ def main() -> int:
         win.show()
         return app.exec()
     except Exception as e:                           # GUI 不可用（无显示/缺依赖）→ 控制台
-        print(f"GUI 不可用，退回控制台模式：{e}")
+        log(f"GUI 不可用，退回控制台模式：{e}")
         ctrl.start()
         try:
             threading.Event().wait()

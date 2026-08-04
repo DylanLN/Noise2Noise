@@ -59,6 +59,26 @@ env -u PYTHONPATH .venv/bin/python -m pytest tests/ -v
 
 覆盖：滤波、特征提取、本底标定、6 类检测规则、滞回状态机、Episode 语义、仲裁、时间窗口、Mute Gate、Controller 集成、GUI 冒烟。
 
+## 打包成软件
+
+依赖 PyInstaller，产物里会带上 `config.yaml` 和 `sounds/`（放在可执行文件旁边，可编辑）。
+
+### Windows（在 Windows 上执行）
+
+```powershell
+./scripts/build_windows.ps1
+# 产物：dist\NoiseDefense.exe —— 双击运行；日志在 dist\logs\app.log
+```
+
+### Ubuntu（在本机执行）
+
+```bash
+./scripts/build_linux.sh
+# 产物：dist/NoiseDefense/NoiseDefense —— 运行前确保 sudo apt install libportaudio2
+```
+
+> 打包后配置/音效路径自动解析到可执行文件所在目录（见 `paths.py`），与源码位置无关。
+
 ## 待办（V2）
 
 - 蓝牙 HFP 适配（采样率协商、延迟自测、重连）

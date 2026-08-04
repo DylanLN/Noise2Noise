@@ -6,6 +6,8 @@ from pathlib import Path
 
 import yaml
 
+from paths import config_path
+
 
 @dataclass
 class Config:
@@ -37,10 +39,11 @@ class Config:
     sounds_dir: str = "sounds"
 
 
-def load_config(path: str | Path = "config.yaml") -> Config:
-    """加载 YAML；未出现的键保持默认值。文件不存在时返回默认配置。"""
+def load_config(path: str | Path | None = None) -> Config:
+    """加载 YAML；未出现的键保持默认值。文件不存在时返回默认配置。
+    path 为空时用打包/开发环境的默认位置（见 paths.config_path）。"""
     cfg = Config()
-    p = Path(path)
+    p = Path(path) if path else config_path()
     if not p.exists():
         return cfg
     with open(p, "r", encoding="utf-8") as f:
