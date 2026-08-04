@@ -68,7 +68,7 @@ def test_feedback_file_used(tmp_path):
 def test_log_path_writes_file(tmp_path):
     cfg = Config()
     ctrl = Controller(cfg)
-    logf = tmp_path / "app.log"
+    logf = tmp_path / "logs" / "app.log"        # 父目录不存在，也应自动创建
     ctrl.log_path = str(logf)
     ctrl._log("测试日志行")
     assert "测试日志行" in logf.read_text(encoding="utf-8")

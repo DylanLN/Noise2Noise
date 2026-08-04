@@ -128,7 +128,9 @@ class Controller:
             self.on_log(msg)
         if self.log_path:
             line = f"{time.strftime('%H:%M:%S')} {msg}"
-            with open(self.log_path, "a", encoding="utf-8") as f:
+            p = Path(self.log_path)
+            p.parent.mkdir(parents=True, exist_ok=True)   # logs/ 目录可能不存在
+            with open(p, "a", encoding="utf-8") as f:
                 f.write(line + "\n")
 
 
